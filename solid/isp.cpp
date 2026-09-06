@@ -24,3 +24,4 @@ public:
     virtual ~ICamera() = default;
     virtual void CaptureImage() = 0;
 };
+
