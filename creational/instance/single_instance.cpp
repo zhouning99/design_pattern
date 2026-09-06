@@ -1,4 +1,5 @@
 #include <iostream>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 
@@ -12,22 +13,20 @@ public:
 
 class ConfigManager : public IConfigManager {
 public:
-    // 函数内部的局部 static 变量只初始化一次，而且从 C++11 开始初始化是线程安全的。
     static ConfigManager& Instance() {
         static ConfigManager instance;
         return instance;
     }
 
-    void Set(const std::string& key, const std::string& value) {
+    void Set(const std::string& key, const std::string& value) override {
+        std::lock_guard<std::mutex> lock(configs_mutex_);
         configs_[key] = value;
     }
 
-    std::string Get(const std::string& key) const {
+    std::string Get(const std::string& key) const override {
+        std::lock_guard<std::mutex> lock(configs_mutex_);
         auto it = configs_.find(key);
-        if (it != configs_.end()) {
-            return it->second;
-        }
-        return {};
+        return it == configs_.end() ? std::string{} : it->second;
     }
 
     ConfigManager(const ConfigManager&) = delete;
@@ -35,8 +34,8 @@ public:
 
 private:
     ConfigManager() = default;
-    ConfigManager(const ConfigManager&) = delete;
-    ConfigManager& operator=(const ConfigManager&) = delete;
+
+    mutable std::mutex configs_mutex_;
     std::unordered_map<std::string, std::string> configs_;
 };
 
@@ -45,8 +44,8 @@ public:
     explicit Service(IConfigManager& config)
         : config_(config) {}
 
-    void Run() {
-        auto value = config_.Get("xxx");
+    std::string Run() const {
+        return config_.Get("xxx");
     }
 
 private:
@@ -54,8 +53,10 @@ private:
 };
 
 int main() {
-    
-    Service service(ConfigManager::Instance());
-    std::cout << service.Run() << std::endl;
+    auto& config = ConfigManager::Instance();
+    config.Set("xxx", "configured value");
+
+    Service service(config);
+    std::cout << service.Run() << '\n';
     return 0;
 }
